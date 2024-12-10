@@ -1,0 +1,6 @@
+G  ::= E '$'
+E  ::= T {[+-] T}*                      // get_e
+T  ::= P {[*/] P}*                      // get_t
+P  ::= (E) | N | F (E) | ID             // get_p
+N  ::= [0-9]+                           // get_n
+ID ::= [a-z]+                           // get_v | get_op

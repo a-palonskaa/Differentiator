@@ -6,7 +6,12 @@
 
 //===================================CTOR/DTOR===================================================
 
-void exp_tree_t::dtor(node_t* root) {
+void exp_tree_t::dtor() {
+    free(tokens_);
+    tokens_ = nullptr;
+}
+
+void exp_tree_t::delete_tree(node_t* root) {
     delete_subtree_r(root);
 }
 
@@ -70,17 +75,7 @@ err_t exp_tree_t::init(FILE* data_file) {
         return SYNTAX_ERR;
     }
 
-    size_t current_index = 0;
-    for (size_t i = 0; i < text.symbols_amount; i++) {
-        if (text.symbols[i] == '(') {
-            current_index = ++i;
-            break;
-        }
-    }
-
-    // root_ = new_initial_node_r(&text, nullptr, &current_index);
-
-    root_ = GetG((char*) text.symbols);
+    root_ = token_init(&text);
 
     text_dtor(&text);
     return NO_ERR;
@@ -101,13 +96,14 @@ node_t* exp_tree_t::new_initial_node_r(text_t* text, node_t* parent, size_t* ind
        LOG(ERROR, "Memory allocation error\n" STRERROR(errno));
         return nullptr;
     }
-size_t meow = 0;
+
+    int meow = 0;
     if (sscanf((char*) &text->symbols[*index], "%lf%n", &num, &read_characters) != 0) {
         current_node->type = NUM;
         current_node->value = num;
     }
-    else if ((sscanf((char*) &text->symbols[*index], "%1[a-z]", symb, &meow) != 0) &&
-            (sscanf((char*) &text->symbols[*index + 1], "%1[()]", exp, &meow) != 0))  {
+    else if ((sscanf((char*) &text->symbols[*index], "%1[a-z]%n", symb, &meow) != 0) &&
+            (sscanf((char*) &text->symbols[*index + 1], "%1[()]%n", exp, &meow) != 0))  {
         current_node->type = VAR;
         current_node->value = int(symb[0]);
         read_characters = 1;
@@ -281,7 +277,7 @@ node_t* exp_tree_t::differentiate(FILE* ostream, node_t* node) {
 void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op_node) {
     if (op_node == nullptr) return;
     if (node == nullptr) return;
-
+//STUB - DIV
     switch ((int) node->value) {
         case ADD:
             op_node->value = ADD;
@@ -295,27 +291,60 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
             op_node->value = SUB;
 
             op_node->right = differentiate(ostream, node->right);
+            op_node->right->parent = op_node;
             op_node->left = differentiate(ostream, node->left);
+            op_node->left->parent = op_node;
             break;
         case MUL:
             op_node->value = ADD;
-
             if (new_node(OP, MUL, nullptr, nullptr, op_node, LEFT) == nullptr) return;
 
             if (new_node(OP, MUL, nullptr, nullptr, op_node, RIGHT) == nullptr) return;
 
             op_node->left->right = copy_subtree(node->right);
             if (op_node->left->right == nullptr) return;
+            op_node->left->right->parent = op_node->left;
 
             op_node->right->left = copy_subtree(node->left);
+            op_node->right->left->parent = op_node->right;
             if (op_node->right->left == nullptr) return;
 
             op_node->left->left = differentiate(ostream, node->left);
             if (op_node->left->left == nullptr) return;
+            op_node->left->left->parent = op_node->left;
 
             op_node->right->right = differentiate(ostream, node->right);
             if (op_node->right->right == nullptr) return;
+            op_node->right->right->parent = op_node->right;
 
+            break;
+        case DIV:
+            op_node->value = SUB;
+
+            if (new_node(OP, DIV, nullptr, nullptr, op_node, LEFT) == nullptr) return;
+
+            op_node->left->left = differentiate(ostream, node->left);
+            if (op_node->left->left == nullptr) return;
+            op_node->left->left->parent = op_node->left;
+
+            op_node->left->right = copy_subtree(node->right);
+            op_node->left->right->parent = op_node->left;
+
+            if (new_node(OP, DIV, nullptr, nullptr, op_node, RIGHT) == nullptr) return;
+
+            if (new_node(OP, POW, nullptr, nullptr, op_node->right, RIGHT) == nullptr) return;
+            if (new_node(NUM, 2, nullptr, nullptr, op_node->right->right, RIGHT) == nullptr) return;
+
+            op_node->right->right->left = copy_subtree(node->right);
+            op_node->right->right->left->parent = op_node->right->right;
+
+            if (new_node(OP, MUL, nullptr, nullptr, op_node->right, LEFT) == nullptr) return;
+
+            op_node->right->left->left = differentiate(ostream, node->right);
+            op_node->right->left->left->parent = op_node->right->left;
+
+            op_node->right->left->right = copy_subtree(node->left);
+            op_node->right->left->right->parent = op_node->right->left;
             break;
         case LOG:
             op_node->value = MUL;
@@ -324,6 +353,7 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->left = differentiate(ostream, node->right);
             if (op_node->left == nullptr) return;
+            op_node->left->parent = op_node;
 
             if (new_node(NUM, 1, nullptr, nullptr, op_node->right, LEFT) == nullptr) return;
 
@@ -335,22 +365,26 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->right->right->right = copy_subtree(node->right);
             if (op_node->right->right->right == nullptr) return;
+            op_node->right->right->right->parent = op_node->right->right;
 
             op_node->right->right->left->left = copy_subtree(node->left);
             if (op_node->right->right->left->left == nullptr) return;
+            op_node->right->right->left->left->parent = op_node->right->right->left;
             break;
         case LN:
             op_node->value = MUL;
 
             if (new_node(OP, DIV, nullptr, nullptr, op_node, LEFT) == nullptr) return;
 
-            op_node->left = differentiate(ostream, node->left);
-            if (op_node->left == nullptr) return;
+            op_node->right = differentiate(ostream, node->left);
+            if (op_node->right == nullptr) return;
+            op_node->right->parent = op_node;
 
-            if (new_node(NUM, 1, nullptr, nullptr, op_node->right, LEFT) == nullptr) return;
+            if (new_node(NUM, 1, nullptr, nullptr, op_node->left, LEFT) == nullptr) return;
 
-            op_node->right->right = copy_subtree(node->left);
-            if (op_node->right->right == nullptr) return;
+            op_node->left->right = copy_subtree(node->left);
+            if (op_node->left->right == nullptr) return;
+            op_node->left->right->parent = op_node->left; //FIXME - add container
             break;
         case EXP:
             op_node->value = MUL;
@@ -359,11 +393,13 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->left = differentiate(ostream, node->left);
             if (op_node->left == nullptr) return;
+            op_node->left->parent = op_node;
 
             if (new_node(NIL, NULL, nullptr, nullptr, op_node->right, LEFT) == nullptr) return;
 
             op_node->right->left = copy_subtree(node->left);
             if (op_node->right->left == nullptr) return;
+            op_node->right->left->parent = op_node->right;
             break;
         case SIN:
             op_node->value = MUL;
@@ -372,9 +408,11 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->right->left = copy_subtree(node->left);
             if (op_node->right->left == nullptr) return;
+            op_node->right->left->parent = op_node->right;
 
             op_node->left = differentiate(ostream, node->left);
             if (op_node->left == nullptr) return;
+            op_node->left->parent = op_node;
             break;
         case COS:
             op_node->value = MUL;
@@ -384,6 +422,7 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->left = differentiate(ostream, node->left);
             if (op_node->left == nullptr) return;
+            op_node->left->parent = op_node;
 
             op_node->right->left = new_node(NUM, -1, nullptr, nullptr, op_node->right, LEFT);
             if (op_node->right->left == nullptr) return;
@@ -393,12 +432,14 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->right->right->left = copy_subtree(node->left);
             if (op_node->right->right->left == nullptr) return;
+            op_node->right->right->left->parent = op_node->right->right;
             break;
         case TG:
             op_node->value = MUL;
 
             op_node->left = differentiate(ostream, node->left);
             if (op_node->left == nullptr) return;
+            op_node->left->parent = op_node;
 
             op_node->right = new_node(OP, DIV, nullptr, nullptr, op_node, RIGHT);
             if (op_node->right == nullptr) return;
@@ -420,12 +461,14 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->right->right->left->left = copy_subtree(node->left);
             if (op_node->right->right->left->left == nullptr) return;
+            op_node->right->right->left->left->parent = op_node->right->right->left;
             break;
         case CTG:
             op_node->value = MUL;
 
             op_node->left = differentiate(ostream, node->left);
             if (op_node->left == nullptr) return;
+            op_node->left->parent = op_node;
 
             op_node->right = new_node(OP, DIV, nullptr, nullptr, op_node, RIGHT);
             if (op_node->right == nullptr) return;
@@ -447,6 +490,7 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->right->right->left->left = copy_subtree(node->left);
             if (op_node->right->right->left->left == nullptr) return;
+            op_node->right->right->left->parent = op_node->right->right->left;
             break;
         case SH:
             op_node->value = MUL;
@@ -456,9 +500,11 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->right->left = copy_subtree(node->left);
             if (op_node->right->left == nullptr) return;
+            op_node->right->left->parent = op_node->right;
 
             op_node->left = differentiate(ostream, node->left);
             if (op_node->left  == nullptr) return;
+            op_node->left->parent = op_node;
             break;
         case CH:
             op_node->value = MUL;
@@ -468,15 +514,18 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->right->left = copy_subtree(node->left);
             if (op_node->right->left == nullptr) return;
+            op_node->right->left->parent = op_node->right;
 
             op_node->left = differentiate(ostream, node->left);
             if (op_node->left  == nullptr) return;
+            op_node->left->parent = op_node;
             break;
         case TH:
             op_node->value = MUL;
 
             op_node->left = differentiate(ostream, node->left);
             if (op_node->left == nullptr) return;
+            op_node->left->parent = op_node;
 
             op_node->right = new_node(OP, DIV, nullptr, nullptr, op_node, RIGHT);
             if (op_node->right == nullptr) return;
@@ -498,12 +547,14 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->right->right->left->left = copy_subtree(node->left);
             if (op_node->right->right->left->left) return;
+            op_node->right->right->left->left->parent = op_node->right->right->left;
             break;
         case CTH:
             op_node->value = MUL;
 
             op_node->left = differentiate(ostream, node->left);
             if (op_node->left) return;
+            op_node->left->parent = op_node;
 
             op_node->right = new_node(OP, DIV, nullptr, nullptr, op_node, RIGHT);
             if (op_node->right == nullptr) return;
@@ -525,12 +576,14 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->right->right->left->left = copy_subtree(node->left);
             if (op_node->right->right->left->left) return;
+            op_node->right->right->left->left->parent = op_node->right->right->left;
             break;
         case ARCSIN:
             op_node->value = DIV;
 
             op_node->left = differentiate(ostream, node->left);
             if (op_node->left == nullptr) return;
+            op_node->left->parent = op_node;
 
             if (new_node(OP, POW, nullptr, nullptr, op_node, RIGHT) == nullptr) return;
 
@@ -546,6 +599,7 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->right->left->right->left = copy_subtree(node->left);
             if (op_node->right->left->right->left == nullptr) return;
+            op_node->right->left->right->left->parent = op_node->right->left->right;
             break;
         case ARCCOS:
             op_node->value = MUL;
@@ -556,12 +610,14 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
             op_node->right = differentiate(ostream, node);
             node->value = ARCCOS;
             if (op_node->right == nullptr) return;
+            op_node->right->parent = op_node;
             break;
         case ARCTG:
             op_node->value = DIV;
 
             op_node->left = differentiate(ostream, node->left);
             if (op_node->left == nullptr) return;
+            op_node->left->parent = op_node;
 
             if (new_node(OP, SUB, nullptr, nullptr, op_node, RIGHT) == nullptr) return;
 
@@ -577,6 +633,7 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->right->right->left = copy_subtree(node->left);
             if (op_node->right->right->left == nullptr) return;
+            op_node->right->right->left->parent = op_node->right->right;
             break;
         case ARCCTG:
             op_node->value = MUL;
@@ -587,12 +644,14 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
             op_node->right = differentiate(ostream, node);
             node->value = ARCCTG;
             if (op_node->right == nullptr) return;
+            op_node->right->parent = op_node;
             break;
         case ARCSH:
             op_node->value = DIV;
 
             op_node->left = differentiate(ostream, node->left);
             if (op_node->left == nullptr) return;
+            op_node->left->parent = op_node;
 
             if (new_node(OP, POW, nullptr, nullptr, op_node, RIGHT) == nullptr) return;
 
@@ -608,12 +667,14 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->right->left->right->left = copy_subtree(node->left);
             if (op_node->right->left->right->left == nullptr) return;
+            op_node->right->left->right->left->parent = op_node->right->left->right;
             break;
         case ARCCH:
             op_node->value = DIV;
 
             op_node->left = differentiate(ostream, node->left);
             if (op_node->left == nullptr) return;
+            op_node->left->parent = op_node;
 
             if (new_node(OP, POW, nullptr, nullptr, op_node, RIGHT) == nullptr) return;
 
@@ -629,6 +690,7 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->right->left->right->left = copy_subtree(node->left);
             if (op_node->right->left->right->left == nullptr) return;
+            op_node->right->left->right->left->parent = op_node->right->left->right;
             break;
         case ARCCTH:
             [[fallthrough]];
@@ -637,6 +699,7 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->left = differentiate(ostream, node->left);
             if (op_node->left == nullptr) return;
+            op_node->left->parent = op_node;
 
             if (new_node(OP, SUB, nullptr, nullptr, op_node, RIGHT) == nullptr) return;
 
@@ -648,6 +711,7 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->right->right->left = copy_subtree(node->left);
             if (op_node->right->right->left == nullptr) return;
+            op_node->right->right->left->parent = op_node->right->right;
             break;
         case POW: {
             bool var_right = is_var_present_r(node->right);
@@ -664,15 +728,23 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
                 if (new_node(OP, MUL, nullptr, nullptr, op_node, RIGHT) == nullptr) return;
                 op_node->left = differentiate(ostream, node->left);
+                if (op_node->left == nullptr) return;
+                op_node->left->parent = op_node;
 
                 op_node->right->left = copy_subtree(node->right);
+                if (op_node->right->left == nullptr) return;
+                op_node->right->left->parent = op_node->right;
 
                 if (new_node(OP, POW, nullptr, nullptr, op_node->right, RIGHT) == nullptr) return;
 
                 op_node->right->right->left = copy_subtree(node->left);
+                if (op_node->right->right->left == nullptr) return;
+                op_node->right->right->left->parent = op_node->right->right;
                 if (new_node(OP, SUB, nullptr, nullptr, op_node->right->right, RIGHT) == nullptr) return;
 
                 op_node->right->right->right->left = copy_subtree(node->right);
+                if (op_node->right->right->right->left == nullptr) return;
+                op_node->right->right->right->left->parent = op_node->right->right->right;
                 if (new_node(NUM, 1, nullptr, nullptr, op_node->right->right->right, RIGHT) == nullptr) return;
             }
             else if (var_left == false && var_right == true) {
@@ -680,33 +752,53 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
                 if (new_node(OP, MUL, nullptr, nullptr, op_node, RIGHT) == nullptr) return;
                 op_node->left = differentiate(ostream, node->right);
+                if (op_node->left == nullptr) return;
+                op_node->left->parent = op_node;
 
                 op_node->right->left = copy_subtree(node);
+                if (op_node->right->left == nullptr) return;
+                op_node->right->left->parent = op_node->right;
                 if (new_node(OP, LN, nullptr, nullptr, op_node->right, RIGHT) == nullptr) return;
 
                 op_node->right->right->left = copy_subtree(node->left);
+                if (op_node->right->right->left == nullptr) return;
+                op_node->right->right->left->parent = op_node->right->right;
                 if (new_node(NIL, NULL, nullptr, nullptr, op_node->right->right, RIGHT) == nullptr) return;
             }
             else if (var_left == true && var_right == true) {
                 op_node->value = MUL;
 
                 op_node->left = copy_subtree(node);
+                if (op_node->left == nullptr) return;
+                op_node->left->parent = op_node;
                 if (new_node(OP, ADD, nullptr, nullptr, op_node, RIGHT) == nullptr) return;
 
                 if (new_node(OP, MUL, nullptr, nullptr, op_node->right, RIGHT) == nullptr) return;
                 if (new_node(OP, MUL, nullptr, nullptr, op_node->right, LEFT) == nullptr) return;
 
                 op_node->right->right->left = copy_subtree(node->right);
+                if (op_node->right->right->left  == nullptr) return;
+                op_node->right->right->left->parent = op_node->right->right;
                 if (new_node(OP, DIV, nullptr, nullptr, op_node->right->right, RIGHT) == nullptr) return;
 
                 op_node->right->right->right->right = copy_subtree(node->left);
+                if (op_node->right->right->right->right  == nullptr) return;
+                op_node->right->right->right->right->parent = op_node->right->right->right;
+
                 op_node->right->right->right->left = differentiate(ostream, node->left);
+                if (op_node->right->right->right->left == nullptr) return;
+                op_node->right->right->right->left->parent = op_node->right->right->right;
 
                 op_node->right->left->left = differentiate(ostream, node->right);
+                if (op_node->right->left->left == nullptr) return;
+                op_node->right->left->left->parent = op_node->right->left;
+
                 if (new_node(OP, LN, nullptr, nullptr, op_node->right->left, RIGHT) == nullptr) return;
 
                 if (new_node(NIL, NULL, nullptr, nullptr, op_node->right->left->right, RIGHT) == nullptr) return;
                 op_node->right->left->right->left = copy_subtree(node->left);
+                if (op_node->right->left->right->left == nullptr) return;
+                op_node->right->left->right->left->parent = op_node->right->left->right;
             }
             break;
         }
@@ -755,17 +847,37 @@ node_t* exp_tree_t::copy_subtree(node_t* node) {
 
 //===================================OPTIMIZE================================================
 
-void exp_tree_t::calculations_optimization_r(node_t* node) {
+node_t* exp_tree_t::optimize(node_t* node) {
     if (node == nullptr) {
-        return;
+        return nullptr;
     }
 
+    bool change_flag = true;
+    bool basic_op_flag = false;
+
+    while (change_flag == true) {
+        change_flag = false;
+        basic_op_flag = false;
+        change_flag |= calculations_optimization_r(node);
+        node = basic_operations_optimization_r(node, ROOT, &basic_op_flag);
+        change_flag |= basic_op_flag;
+    }
+    return node;
+}
+
+bool exp_tree_t::calculations_optimization_r(node_t* node) {
+    if (node == nullptr) {
+        return false;
+    }
+
+    bool change_flag = false;
+
     if (node->left != nullptr) {
-        calculations_optimization_r(node->left);
+        change_flag |= calculations_optimization_r(node->left);
     }
 
     if (node->right != nullptr) {
-        calculations_optimization_r(node->right);
+        change_flag |= calculations_optimization_r(node->right);
     }
 
     if (node->type == OP && node->left != nullptr && node->right != nullptr &&
@@ -779,65 +891,56 @@ void exp_tree_t::calculations_optimization_r(node_t* node) {
         node->left = nullptr;
         node->right = nullptr;
         node->type = NUM;
+        change_flag |= true;
     }
+    return change_flag;
 }
 
-void exp_tree_t::basic_operations_optimization_r(node_t* node, rel_t rel) {
+node_t* exp_tree_t::basic_operations_optimization_r(node_t* node, rel_t rel, bool* flag) {
     if (node == nullptr) {
-        return;
+        return nullptr;
     }
 
     if (node->left != nullptr) {
-        basic_operations_optimization_r(node->left, LEFT);
+        basic_operations_optimization_r(node->left, LEFT, flag);
     }
 
     if (node->right != nullptr) {
-        basic_operations_optimization_r(node->right, RIGHT);
+        basic_operations_optimization_r(node->right, RIGHT, flag);
     }
 
     if (node->type == OP && node->left != nullptr && node->right != nullptr &&
        (node->left->type == NUM || node->right->type == NUM)) {
         if (node->left->type == NUM) {
             if ((int) node->left->value == 0) {
-                null_val__optimization(node, LEFT, rel);
+                null_val__optimization(node, LEFT, rel, flag);
             }
-            if ((int) node->left->value == 1) {
-                one_val_optimization(node, LEFT, rel);
+            else if ((int) node->left->value == 1) {
+                node = one_val_optimization(node, LEFT, rel, flag);
             }
         }
         else if (node->right->type == NUM) {
             if ((int) node->right->value == 0) {
-                null_val__optimization(node, RIGHT, rel);
+                null_val__optimization(node, RIGHT, rel, flag);
             }
-            if ((int) node->right->value == 1) {
-                one_val_optimization(node, RIGHT, rel);
+            else if ((int) node->right->value == 1) {
+                node = one_val_optimization(node, RIGHT, rel, flag);
             }
         }
     }
+    return node;
 }
 
-void exp_tree_t::null_val__optimization(node_t* node, rel_t rel, rel_t parent_rel) {
+void exp_tree_t::null_val__optimization(node_t* node, rel_t rel, rel_t parent_rel, bool* flag) {
     if (node == nullptr) {
         return;
     }
 
     switch ((int) node->value) {
         case ADD:
-            [[fallthrough]];
         case SUB:
-            if (parent_rel == LEFT) {
-                if (rel == LEFT) {
-                    node->parent->left = node->right;
-                    free(node->left);
-                    free(node);
-                }
-                else if (rel == RIGHT) {
-                    node->parent->left = node->left;
-                    free(node->right);
-                    free(node);
-                }
-            }
-            else if (parent_rel == RIGHT) {
+            if (parent_rel == RIGHT) {
+                *flag = true;
                 if (rel == LEFT) {
                     node->parent->right = node->right;
                     free(node->left);
@@ -851,14 +954,20 @@ void exp_tree_t::null_val__optimization(node_t* node, rel_t rel, rel_t parent_re
             }
             break;
         case DIV:
-            if (rel == LEFT) {
+            if (rel == RIGHT) {
                 LOG(ERROR, "Division by zero err\n"); //SECTION - may check errors
                 return;
             }
+
             [[fallthrough]];
         case MUL:
+            *flag = true;
             delete_subtree_r(node->right);
             delete_subtree_r(node->left);
+
+            node->right = nullptr;
+            node->left = nullptr;
+
             node->type = NUM;
             node->value = 0;
             break;
@@ -867,13 +976,14 @@ void exp_tree_t::null_val__optimization(node_t* node, rel_t rel, rel_t parent_re
     }
 }
 
-void exp_tree_t::one_val_optimization(node_t* node, rel_t rel, rel_t parent_rel) {
+node_t* exp_tree_t::one_val_optimization(node_t* node, rel_t rel, rel_t parent_rel, bool* flag) {
     if (node == nullptr) {
-        return;
+        return nullptr;
     }
 
     switch ((int) node->value) {
         case MUL:
+            *flag = true;
             if (parent_rel == LEFT) {
                 if (rel == LEFT) {
                     node->parent->left = node->right;
@@ -898,23 +1008,59 @@ void exp_tree_t::one_val_optimization(node_t* node, rel_t rel, rel_t parent_rel)
                     free(node);
                 }
             }
+            else if (parent_rel == ROOT) {
+                if (rel == LEFT) {
+                    node_t* new_root = node->right;
+                    free(node->left);
+                    free(node);
+                    new_root->parent = nullptr;
+                    return new_root;
+                }
+                else if (rel == RIGHT) {
+                    node_t* new_root = node->left;
+                    free(node->right);
+                    free(node);
+                    new_root->parent = nullptr;
+                    return new_root;
+                }
+            }
             break;
         case DIV:
-            if (rel == LEFT) return;
+            if (rel == LEFT) return node;
+            *flag = true;
             if (parent_rel == LEFT) {
                 node->parent->left = node->left;
             }
             else if (parent_rel == RIGHT) {
                 node->parent->right = node->left;
             }
+            else if (parent_rel == ROOT) {
+                node_t* left = node->left;
+                free(node);
+                free(node->right);
+                if (left == nullptr) return nullptr;
+                left->parent = nullptr;
+                return node->left;
+            }
             free(node->right);
             free(node);
             break;
-        case ADD:
-            break;
-        case SUB:
+        case POW:
+            if (rel == RIGHT) {
+                *flag = true;
+                if (parent_rel == LEFT) {
+                    node->parent->left = node->left;
+                }
+                else if (parent_rel == RIGHT) {
+                    node->parent->right = node->left;
+                }
+
+                free(node->right);
+                free(node);
+            }
             break;
         default:
             break;
     }
+    return node;
 }

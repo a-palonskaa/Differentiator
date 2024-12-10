@@ -4,7 +4,7 @@
 #include "expression_tree.h"
 #include "logger.h"
 
-const size_t MAX_NAME_LEN = 40;
+const size_t MAX_FILENAME_LEN = 40;
 const size_t COMMAND_SIZE = 100;
 
 const char* FILENAME = "tree";
@@ -29,6 +29,10 @@ void exp_tree_t::print_inorder_() {
 }
 
 //=========================================================================================
+
+void exp_tree_t::dump_tree() {
+    dump(root_);
+}
 
 void exp_tree_t::print_preorder(node_t* node) {
     if (node == nullptr) {
@@ -322,11 +326,11 @@ void exp_tree_t::dump(node_t* root) {
     fprintf(ostream, "<pre>");
     static size_t image_cnt = 0;
 
-    char tree_filename[MAX_NAME_LEN] = {};
-    char image_filename[MAX_NAME_LEN] = {};
+    char tree_filename[MAX_FILENAME_LEN] = {};
+    char image_filename[MAX_FILENAME_LEN] = {};
 
-    snprintf(tree_filename, MAX_NAME_LEN, "data/images/%s%zu.dot", FILENAME, image_cnt);
-    snprintf(image_filename, MAX_NAME_LEN, "data/images/%s%zu.png", FILENAME, image_cnt);
+    snprintf(tree_filename, MAX_FILENAME_LEN, "data/images/%s%zu.dot", FILENAME, image_cnt);
+    snprintf(image_filename, MAX_FILENAME_LEN, "data/images/%s%zu.png", FILENAME, image_cnt);
 
     FILE* tree_file = fopen(tree_filename, "wb");
     if (tree_file == nullptr) {
@@ -403,7 +407,7 @@ void exp_tree_t::print_nodes(FILE* tree_file, node_t* node, size_t rank) {
             break;
         }
         case VAR:
-            fprintf(tree_file,  "'x'"); //FIXME - myrr meow
+            fprintf(tree_file,  "%c", char(node->value)); //FIXME - myrr meow
             break;
         case NUM:
             fprintf(tree_file, "%f", node->value);
@@ -418,8 +422,10 @@ void exp_tree_t::print_nodes(FILE* tree_file, node_t* node, size_t rank) {
                        "<tr><td>right = %p</td></tr>"
                        "<tr><td bgcolor='black' height='1'></td></tr>"
                        "<tr><td>left = %p</td></tr>"
+                        "<tr><td bgcolor='black' height='1'></td></tr>"
+                       "<tr><td>parent = %p</td></tr>"
                        "</table>>];\n\t"
-                       "rank = %zu\n", node->right, node->left, rank);
+                       "rank = %zu\n", node->right, node->left, node->parent, rank);
 
     if (node->left != nullptr) print_nodes(tree_file, node->left, rank + 1);
     if (node->right != nullptr) print_nodes(tree_file, node->right, rank + 1);

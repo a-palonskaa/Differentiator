@@ -1,47 +1,81 @@
+#include <cstdlib>
+#include <errno.h>
+#include <string.h>
 #include "expression_tree.h"
 #include "logger.h"
 
+const char* del_images = "./del_images.sh";
+
 int main() {
-    exp_tree_t tree;
-    FILE* file = fopen("data/dump.html", "wb");
-    FILE* istream = fopen("data/input/data.txt", "r");
-    FILE* tex = fopen("data/output/exp.tex", "w");
     FILE* logger = fopen("data/logger.txt", "w");
-    tree.set_dump_ostream(file);
+    if (logger == nullptr) {
+        LOG(ERROR, "Failed to open a logger ostream\n");
+        return 1;
+    }
 
     LoggerSetFile(logger);
     LoggerSetLevel(INFO);
 
+    int system_execution_status = system(del_images);
+    if (system_execution_status == -1 || system_execution_status == 127) {
+        LOG(ERROR, "Failed to execute bash script %s\n", del_images);
+    }
+
+    FILE* file = fopen("data/dump.html", "wb");
+    if (file == nullptr) {
+        LOG(ERROR, "Failed to open a dump ostream\n");
+        return 1;
+    }
+
+    FILE* istream = fopen("data/input/data.txt", "r");
+    if (istream == nullptr) {
+        LOG(ERROR, "Failed to open an input data file\n");
+        return 1;
+    }
+
+    FILE* tex = fopen("data/output/exp.tex", "w");
+    if (tex == nullptr) {
+        LOG(ERROR, "Failed to open a tex file\n");
+        return 1;
+    }
+
+    exp_tree_t tree = {};
+
+// NOTE - add унарный минус плюс
+// STUB - полуторное дерево
+// TODO - верификатор: нет циклов, все что не листья - операторы, у var, num нетс детей
+
+    tree.set_dump_ostream(file);
     tree.init(istream);
-    tree.dump(tree.root_);
+
+    tree.dump_tree();
     node_t* new_root = tree.differentiate_expression(tex);
-    tree.calculations_optimization_r(new_root);
-    tree.basic_operations_optimization_r(new_root, ROOT);
-    tree.calculations_optimization_r(new_root);
-
-//TODO - optimization till nothing can be optimized
-
     tree.dump(new_root);
-    tree.dtor(new_root);
-    tree.dtor(tree.root_);
 
-    fclose(tex);
-    fclose(file);
-    fclose(istream);
+    new_root = tree.optimize(new_root);
+    tree.dump(new_root);
 
+    tree.dtor();
+    tree.delete_tree(new_root);
 
-//     node_t* root = tree.new_node(OP, DIV, nullptr, nullptr, nullptr, ROOT);
-//     node_t* root_lc = tree.new_node(OP, ADD, nullptr, nullptr, root, LEFT);
-//     tree.new_node(VAR, 'x', nullptr, nullptr, root_lc, LEFT);
-//     tree.new_node(NUM, 3, nullptr, nullptr, root_lc, RIGHT);
-//
-//     node_t* root_rc = tree.new_node(OP, SUB, nullptr, nullptr, root, RIGHT);
-//     tree.new_node(NUM, 1000, nullptr, nullptr, root_rc, LEFT);
-//     tree.new_node(NUM, 7, nullptr, nullptr, root_rc, RIGHT);
-//
-//     tree.print_preorder(root);
-//     tree.print_inorder(root);
-//     tree.dump(root);
-//     tree.dtor(root);
+    if (fclose(tex) == EOF) {
+        LOG(ERROR, "Failed to close tex file\n" STRERROR(errno));
+        return 1;
+    }
+
+    if (fclose(file) == EOF) {
+        LOG(ERROR, "Failed to close html file\n" STRERROR(errno));
+        return 1;
+    }
+
+    if (fclose(istream) == EOF) {
+        LOG(ERROR, "Failed to close data file\n" STRERROR(errno));
+        return 1;
+    }
+
+    if (fclose(logger) == EOF) {
+        fprintf(stderr, "Failed to close tex file\n" STRERROR(errno));
+        return 1;
+    }
     return 0;
 }
