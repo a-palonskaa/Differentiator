@@ -17,7 +17,7 @@ LIBS_DIR = $(COMMON_DIR)
 BUILD_DIR = build
 
 INCLUDES = include common/logger common/text
-SOURCES = main.cpp expression_tree.cpp dump.cpp parser.cpp tokenization.cpp
+SOURCES = main.cpp expression_tree.cpp dump.cpp parser.cpp tokenization.cpp verify.cpp
 OBJECTS = $(addprefix $(BUILD_DIR)/src/, $(SOURCES:%.cpp=%.o))
 DEPS = $(OBJECTS:%.o=%.d)
 

@@ -12,7 +12,6 @@ typedef enum {
     NUM = 0,
     VAR = 1,
     OP  = 2,
-    NIL = 3,
 } type_t;
 
 typedef enum {
@@ -47,7 +46,11 @@ typedef enum {
     EOT           = 26,
 } op_t;
 
-struct node_t{
+typedef struct {
+    char name[MAX_NAME_LEN];
+}  name_t;
+
+struct node_t {
     node_t* parent;
     node_t* left;
     node_t* right;
@@ -57,9 +60,16 @@ struct node_t{
 };
 
 typedef enum {
-    NO_ERR        = 0,
-    SYNTAX_ERR    = 1,
-    MEM_ALLOC_ERR = 2,
+    NO_ERR             = 0,
+    SYNTAX_ERR         = 1,
+    MEM_ALLOC_ERR      = 2,
+    NUM_INVAR_ERR      = 3,
+    UN_OP_INVAR_ERR    = 4,
+    BIN_OP_INVAR_ERR   = 5,
+    SUB_SYNTAX_ERR     = 6,
+    ADD_SYNTAX_ERR     = 7,
+    INVALID_ROOT_ERR   = 8,
+    CYCLIC_LINKING_ERR = 9,
 } err_t;
 
 typedef enum {
@@ -122,15 +132,18 @@ public:
     node_t* new_initial_node_infix(text_t* text, node_t* parent, size_t* index);
     int def_operator(char* op);
 
-    double calculate_value(double op_type, double val_l, double val_r);
+    double calculate_value(double op_type, node_t* node_l, node_t* node_r);
     void calculate_expression_r(node_t* node);
     double calculate_expression(node_t* node);
 
     void print_tree_to_tex(FILE* ostream, node_t* root);
+    void print_exp_to_tex(FILE* ostream, node_t* node);
 
     node_t* differentiate_expression(FILE* ostream);
 
     node_t* optimize(node_t* node);
+
+    err_t verify(node_t* root);
 private:
     void add_parents_rel_r(node_t* node, node_t* parent);
     node_t* new_node(type_t type, double value, node_t* left, node_t* right, node_t* parent, rel_t rel);
@@ -144,11 +157,10 @@ private:
     bool calculations_optimization_r(node_t* node);
     node_t* basic_operations_optimization_r(node_t* node, rel_t rel, bool* flag);
     node_t* one_val_optimization(node_t* node, rel_t rel, rel_t parent_rel, bool* flag);
-    void null_val__optimization(node_t* node, rel_t rel, rel_t parent_rel, bool* flag);
+    node_t* null_val__optimization(node_t* node, rel_t rel, rel_t parent_rel, bool* flag);
 
     bool is_var_present_r(node_t* node);
     void print_derivative_to_tex(FILE* ostream, node_t* node);
-    void print_exp_to_tex(FILE* ostream, node_t* node);
 
     node_t* copy_subtree(node_t* node);
     void differentiate_operation(FILE* ostream, node_t* node, node_t* op_node);
@@ -170,11 +182,22 @@ private:
     node_t* link_tokens();
     void tokenize_text(text_t* text);
     void parse_identificator(text_t* text, size_t* ip, node_t* node);
-    op_t is_func(char* name);
+    op_t is_operator(char* name);
+    bool is_unary(double value);
     void parse_number(text_t* text, size_t* ip, node_t* node);
     void initialize_op_node(node_t* node, double val);
     void print_tokens_array();
+
+    double find_name_in_nametable(char* name);
+    double add_name_to_nametable(char* name);
+    double index_in_nametable(char* name);
+    void print_var_nametable();
+
+    bool is_tree_acyclic_r(node_t* node, node_t* parent);
+    err_t check_op_type_invariants_r(node_t* node);
 private:
+    name_t var_nametable_[100];
+    size_t var_nametable_size_{0};
     node_t* root_;
     node_t* tokens_{nullptr};
     size_t tokens_array_size_{0};

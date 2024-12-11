@@ -1,6 +1,7 @@
 #include <assert.h>
 #include <string.h>
 #include <errno.h>
+#include <math.h>
 #include "logger.h"
 #include "expression_tree.h"
 
@@ -76,7 +77,7 @@ err_t exp_tree_t::init(FILE* data_file) {
     }
 
     root_ = token_init(&text);
-
+    dump_tree();
     text_dtor(&text);
     return NO_ERR;
 }
@@ -115,8 +116,7 @@ node_t* exp_tree_t::new_initial_node_r(text_t* text, node_t* parent, size_t* ind
     }
     else if (sscanf((char*) &text->symbols[*index], "%1[)]", symb) != 0) {
         read_characters = 0;
-        current_node->type = NIL;
-        current_node->value = NULL;
+        current_node->value = NAN;
     }
 
     *index += (size_t) read_characters;
@@ -194,7 +194,7 @@ void exp_tree_t::calculate_expression_r(node_t* node) {
             val_r = node->right->value;
         }
 
-        node->value = calculate_value(node->value, val_l, val_r);
+        node->value = calculate_value(node->value, node->left, node->right);
 
         free(node->left);
         free(node->right);
@@ -205,23 +205,60 @@ void exp_tree_t::calculate_expression_r(node_t* node) {
     }
 }
 
-double exp_tree_t::calculate_value(double op_type, double val_l, double val_r) {
+double exp_tree_t::calculate_value(double op_type, node_t* node_l,  node_t* node_r) {
+    double val_l = (node_l == nullptr) ? NAN : node_l->value;
+    double val_r = (node_r == nullptr) ? NAN : node_r->value;
+
     switch ((int) op_type) {
         case ADD:
             return val_l + val_r;
-            break;
         case SUB:
             return val_l - val_r;
-            break;
         case MUL:
             return val_l * val_r;
-            break;
         case DIV:
             return val_l / val_r;
-            break;
+        case POW:
+            return pow(val_l, val_r);
+        case SIN:
+            return sin(val_r);
+        case COS:
+            return cos(val_r);
+        case TG:
+            return tan(val_r);
+        case CTG:
+            return 1 / tan(val_r);
+        case SH:
+            return sinh(val_r);
+        case CH:
+            return cosh(val_r);
+        case TH:
+            return tanh(val_r);
+        case CTH:
+            return 1 / tanh(val_r);
+        case ARCSIN:
+            return asin(val_r);
+        case ARCCOS:
+            return acos(val_r);
+        case ARCTG:
+            return atan(val_r);
+        case ARCCTG:
+            return M_PI / 2 - atan(val_r);
+        case ARCSH:
+            return asinh(val_r);
+        case ARCCH:
+            return acosh(val_r);
+        case ARCTH:
+            return atanh(val_r);
+        case ARCCTH:
+            return atanh(val_r);
+        case LOG:
+            return log(val_r) / log(val_l);
+        case LN:
+            return log(val_r);
         default:
             LOG(ERROR, "Undefined operation %d(%lf)\n", (int) op_type, op_type);
-            return NULL;
+            return NAN;
             break;
     }
 
@@ -262,10 +299,6 @@ node_t* exp_tree_t::differentiate(FILE* ostream, node_t* node) {
             differentiate_operation(ostream, node, diff_root);
             break;
         }
-        case NIL: {
-            free(diff_root);
-            return nullptr;
-        }
         default: {
             break;
         }
@@ -277,9 +310,18 @@ node_t* exp_tree_t::differentiate(FILE* ostream, node_t* node) {
 void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op_node) {
     if (op_node == nullptr) return;
     if (node == nullptr) return;
-//STUB - DIV
+
     switch ((int) node->value) {
         case ADD:
+            if (node->left == nullptr) {
+                op_node->value = ADD;
+                op_node->left = nullptr;
+
+                op_node->right = differentiate(ostream, node->right);
+                op_node->right->parent = op_node;
+                break;
+            }
+
             op_node->value = ADD;
 
             op_node->right = differentiate(ostream, node->right);
@@ -288,6 +330,15 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
             op_node->left->parent = op_node;
             break;
         case SUB:
+            if (node->left == nullptr) {
+                op_node->value = SUB;
+                op_node->left = nullptr;
+
+                op_node->right = differentiate(ostream, node->right);
+                op_node->right->parent = op_node;
+                break;
+            }
+
             op_node->value = SUB;
 
             op_node->right = differentiate(ostream, node->right);
@@ -361,7 +412,7 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             if (new_node(OP, LN, nullptr, nullptr, op_node->right->right, LEFT) == nullptr) return;
 
-            if (new_node(NIL, NULL, nullptr, nullptr, op_node->right->right->left, LEFT) == nullptr) return;
+            op_node->right->right->left->left = nullptr;
 
             op_node->right->right->right = copy_subtree(node->right);
             if (op_node->right->right->right == nullptr) return;
@@ -384,7 +435,7 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
             op_node->left->right = copy_subtree(node->left);
             if (op_node->left->right == nullptr) return;
-            op_node->left->right->parent = op_node->left; //FIXME - add container
+            op_node->left->right->parent = op_node->left;
             break;
         case EXP:
             op_node->value = MUL;
@@ -394,8 +445,6 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
             op_node->left = differentiate(ostream, node->left);
             if (op_node->left == nullptr) return;
             op_node->left->parent = op_node;
-
-            if (new_node(NIL, NULL, nullptr, nullptr, op_node->right, LEFT) == nullptr) return;
 
             op_node->right->left = copy_subtree(node->left);
             if (op_node->right->left == nullptr) return;
@@ -456,7 +505,7 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
             op_node->right->right->left = new_node(OP, COS, nullptr, nullptr, op_node->right->right, LEFT);
             if (op_node->right->right == nullptr) return;
 
-            op_node->right->right->left->right = new_node(NIL, NULL, nullptr, nullptr, op_node->right->right->left, RIGHT);
+            op_node->right->right->left->right = nullptr;
             if (op_node->right->right->left->right == nullptr) return;
 
             op_node->right->right->left->left = copy_subtree(node->left);
@@ -485,7 +534,7 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
             op_node->right->right->left = new_node(OP, SIN, nullptr, nullptr, op_node->right->right, LEFT);
             if (op_node->right->right == nullptr) return;
 
-            op_node->right->right->left->right = new_node(NIL, NULL, nullptr, nullptr, op_node->right->right->left, RIGHT);
+            op_node->right->right->left->right = nullptr;
             if (op_node->right->right->left->right == nullptr) return;
 
             op_node->right->right->left->left = copy_subtree(node->left);
@@ -542,7 +591,7 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
             op_node->right->right->left = new_node(OP, CH, nullptr, nullptr, op_node->right->right, LEFT);
             if (op_node->right->right == nullptr) return;
 
-            op_node->right->right->left->right = new_node(NIL, NULL, nullptr, nullptr, op_node->right->right->left, RIGHT);
+            op_node->right->right->left->right = nullptr;
             if (op_node->right->right->left->right == nullptr) return;
 
             op_node->right->right->left->left = copy_subtree(node->left);
@@ -571,7 +620,7 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
             op_node->right->right->left = new_node(OP, SH, nullptr, nullptr, op_node->right->right, LEFT);
             if (op_node->right->right == nullptr) return;
 
-            op_node->right->right->left->right = new_node(NIL, NULL, nullptr, nullptr, op_node->right->right->left, RIGHT);
+            op_node->right->right->left->right = nullptr;
             if (op_node->right->right->left->right == nullptr) return;
 
             op_node->right->right->left->left = copy_subtree(node->left);
@@ -763,7 +812,7 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
                 op_node->right->right->left = copy_subtree(node->left);
                 if (op_node->right->right->left == nullptr) return;
                 op_node->right->right->left->parent = op_node->right->right;
-                if (new_node(NIL, NULL, nullptr, nullptr, op_node->right->right, RIGHT) == nullptr) return;
+                op_node->right->right->right = nullptr;
             }
             else if (var_left == true && var_right == true) {
                 op_node->value = MUL;
@@ -795,7 +844,7 @@ void exp_tree_t::differentiate_operation(FILE* ostream, node_t* node, node_t* op
 
                 if (new_node(OP, LN, nullptr, nullptr, op_node->right->left, RIGHT) == nullptr) return;
 
-                if (new_node(NIL, NULL, nullptr, nullptr, op_node->right->left->right, RIGHT) == nullptr) return;
+                op_node->right->left->right->right = nullptr;
                 op_node->right->left->right->left = copy_subtree(node->left);
                 if (op_node->right->left->right->left == nullptr) return;
                 op_node->right->left->right->left->parent = op_node->right->left->right;
@@ -880,10 +929,17 @@ bool exp_tree_t::calculations_optimization_r(node_t* node) {
         change_flag |= calculations_optimization_r(node->right);
     }
 
-    if (node->type == OP && node->left != nullptr && node->right != nullptr &&
-        node->left->type == NUM && node->right->type == NUM) {
+    if ((node->type == OP) &&
+       ((node->left  != nullptr && node->left->type  == NUM) &&
+        (node->right != nullptr && node->right->type == NUM))) {
 
-        node->value = calculate_value(node->value, node->left->value, node->right->value);
+        if (node->right != nullptr && node->right->type != NUM) return false;
+        if (node->left  != nullptr && node->left->type  != NUM) return false;
+
+        if ((int) node->value == SUB && node->left == nullptr) return false;
+        if ((int) node->value == ADD && node->left == nullptr) return false;
+
+        node->value = calculate_value(node->value, node->left, node->right);
 
         free(node->left);
         free(node->right);
@@ -913,7 +969,7 @@ node_t* exp_tree_t::basic_operations_optimization_r(node_t* node, rel_t rel, boo
        (node->left->type == NUM || node->right->type == NUM)) {
         if (node->left->type == NUM) {
             if ((int) node->left->value == 0) {
-                null_val__optimization(node, LEFT, rel, flag);
+                node = null_val__optimization(node, LEFT, rel, flag);
             }
             else if ((int) node->left->value == 1) {
                 node = one_val_optimization(node, LEFT, rel, flag);
@@ -921,7 +977,7 @@ node_t* exp_tree_t::basic_operations_optimization_r(node_t* node, rel_t rel, boo
         }
         else if (node->right->type == NUM) {
             if ((int) node->right->value == 0) {
-                null_val__optimization(node, RIGHT, rel, flag);
+                node = null_val__optimization(node, RIGHT, rel, flag);
             }
             else if ((int) node->right->value == 1) {
                 node = one_val_optimization(node, RIGHT, rel, flag);
@@ -931,9 +987,9 @@ node_t* exp_tree_t::basic_operations_optimization_r(node_t* node, rel_t rel, boo
     return node;
 }
 
-void exp_tree_t::null_val__optimization(node_t* node, rel_t rel, rel_t parent_rel, bool* flag) {
+node_t* exp_tree_t::null_val__optimization(node_t* node, rel_t rel, rel_t parent_rel, bool* flag) {
     if (node == nullptr) {
-        return;
+        return nullptr;
     }
 
     switch ((int) node->value) {
@@ -952,11 +1008,41 @@ void exp_tree_t::null_val__optimization(node_t* node, rel_t rel, rel_t parent_re
                     free(node);
                 }
             }
+            else if (parent_rel == LEFT) {
+                *flag = true;
+                if (rel == LEFT) {
+                    node->parent->left = node->right;
+                    free(node->left);
+                    free(node);
+                }
+                else if (rel == RIGHT) {
+                    node->parent->left = node->left;
+                    free(node->right);
+                    free(node);
+                }
+            }
+            else if (parent_rel == ROOT) {
+                *flag = true;
+                if (rel == LEFT) {
+                    node_t* new_root = node->right;
+                    free(node->left);
+                    free(node);
+                    new_root->parent = nullptr;
+                    return new_root;
+                }
+                else if (rel == RIGHT) {
+                    node_t* new_root = node->left;
+                    free(node->right);
+                    free(node);
+                    new_root->parent = nullptr;
+                    return new_root;
+                }
+            }
             break;
         case DIV:
             if (rel == RIGHT) {
-                LOG(ERROR, "Division by zero err\n"); //SECTION - may check errors
-                return;
+                LOG(ERROR, "Division by zero err\n");
+                return nullptr;
             }
 
             [[fallthrough]];
@@ -974,6 +1060,7 @@ void exp_tree_t::null_val__optimization(node_t* node, rel_t rel, rel_t parent_re
         default:
             break;
     }
+    return node;
 }
 
 node_t* exp_tree_t::one_val_optimization(node_t* node, rel_t rel, rel_t parent_rel, bool* flag) {

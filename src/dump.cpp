@@ -27,6 +27,7 @@ void exp_tree_t::print_preorder_() {
 void exp_tree_t::print_inorder_() {
     print_inorder(stdout, root_, 0);
 }
+//Алина - самая лучшая girl in this fucking world, u know, Alexei
 
 //=========================================================================================
 
@@ -47,16 +48,13 @@ void exp_tree_t::print_preorder(node_t* node) {
             break;
         }
         case VAR: {
-            printf("x"); //FIXME - myrr meow
+            printf("%s", var_nametable_[(int) node->value].name);
             break;
         }
         case NUM: {
             printf("%f", node->value);
             break;
         }
-        case NIL:
-        printf("nil");
-            break;
         default:
             break;
     };
@@ -83,10 +81,7 @@ void exp_tree_t::print_inorder(FILE* ostream, node_t* node, int parent_precedenc
             current_precedence = get_operator_precedence((int) node->value);
             break;
         case VAR:
-            [[fallthrough]];
         case NUM:
-            [[fallthrough]];
-        case NIL:
             current_precedence = -1;
             break;
         default:
@@ -118,6 +113,9 @@ void exp_tree_t::print_inorder(FILE* ostream, node_t* node, int parent_precedenc
             fprintf(ostream, "(");
         }
 
+//ХУЙНЯ ПЕРЕДЕЛЫВАЙ - целуй меня чаще
+//ХУЙНЯ - ты слишком ахуенная
+
         print_inorder(ostream, node->left, current_precedence);
 
         if (current_precedence > parent_precedence) {
@@ -127,125 +125,119 @@ void exp_tree_t::print_inorder(FILE* ostream, node_t* node, int parent_precedenc
 
     switch (node->type) {
         case OP: {
-            if ((int) node->value == DIV) {
-                fprintf(ostream, "\\frac{");
-                print_inorder(ostream, node->left, current_precedence);
-                fprintf(ostream, "}{");
-                print_inorder(ostream, node->right, current_precedence);
-                fprintf(ostream, "}");
-            }
-            else if ((int) node->value == LN) {
-                fprintf(ostream, "\\ln{");
-                print_inorder(ostream, node->left, current_precedence);
-                fprintf(ostream, "}");
-            }
-            else if ((int) node->value == LOG) {
-                fprintf(ostream, "\\log{");
-                print_inorder(ostream, node->left, current_precedence);
-                fprintf(ostream, "}");
-            }
-            else if ((int) node->value == SIN) {
-                fprintf(ostream, "\\sin{");
-                print_inorder(ostream, node->left, current_precedence);
-                fprintf(ostream, "}");
-            }
-            else if ((int) node->value == COS) {
-                fprintf(ostream, "\\cos{");
-                print_inorder(ostream, node->left, current_precedence);
-                fprintf(ostream, "}");
-            }
-            else if ((int) node->value == TG) {
-                fprintf(ostream, "\\tan{");
-                print_inorder(ostream, node->left, current_precedence);
-                fprintf(ostream, "}");
-            }
-            else if ((int) node->value == CTG) {
-                fprintf(ostream, "\\cot{");
-                print_inorder(ostream, node->left, current_precedence);
-                fprintf(ostream, "}");
-            }
-            else if ((int) node->value == SH) {
-                fprintf(ostream, "\\sinh{");
-                print_inorder(ostream, node->left, current_precedence);
-                fprintf(ostream, "}");
-            }
-            else if ((int) node->value == CH) {
-                fprintf(ostream, "\\cosh{");
-                print_inorder(ostream, node->left, current_precedence);
-                fprintf(ostream, "}");
-            }
-            else if ((int) node->value == TH) {
-                fprintf(ostream, "\\tanh{");
-                print_inorder(ostream, node->left, current_precedence);
-                fprintf(ostream, "}");
-            }
-            else if ((int) node->value == CTH) {
-                fprintf(ostream, "\\coth{");
-                print_inorder(ostream, node->left, current_precedence);
-                fprintf(ostream, "}");
-            }
-            else if ((int) node->value == ARCSIN) {
-                fprintf(ostream, "\\arcsin{");
-                print_inorder(ostream, node->left, current_precedence);
-                fprintf(ostream, "}");
-            }
-            else if ((int) node->value == ARCCOS) {
-                fprintf(ostream, "\\arccos{");
-                print_inorder(ostream, node->left, current_precedence);
-                fprintf(ostream, "}");
-            }
-            else if ((int) node->value == ARCTG) {
-                fprintf(ostream, "\\arctan{");
-                print_inorder(ostream, node->left, current_precedence);
-                fprintf(ostream, "}");
-            }
-            else if ((int) node->value == ARCCTG) {
-                fprintf(ostream, "\\arccot{");
-                print_inorder(ostream, node->left, current_precedence);
-                fprintf(ostream, "}");
-            }
-            else {
-                print_operator(ostream, node->value);
+            switch ((int) node->value)  {
+                case DIV: {
+                    fprintf(ostream, "\\frac{");
+                    print_inorder(ostream, node->left, current_precedence);
+                    fprintf(ostream, "}{");
+                    print_inorder(ostream, node->right, current_precedence);
+                    fprintf(ostream, "}");
+                    break;
+                }
+                case LN: {
+                    fprintf(ostream, "\\ln{");
+                    print_inorder(ostream, node->left, current_precedence);
+                    fprintf(ostream, "}");
+                    break;
+                }
+                case LOG: {
+                    fprintf(ostream, "\\log{");
+                    print_inorder(ostream, node->left, current_precedence);
+                    fprintf(ostream, "}");
+                    break;
+                }
+                case SIN: {
+                    fprintf(ostream, "\\sin{");
+                    print_inorder(ostream, node->left, current_precedence);
+                    fprintf(ostream, "}");
+                    break;
+                }
+                case COS: {
+                    fprintf(ostream, "\\cos{");
+                    print_inorder(ostream, node->left, current_precedence);
+                    fprintf(ostream, "}");
+                    break;
+                }
+                case TG: {
+                    fprintf(ostream, "\\tan{");
+                    print_inorder(ostream, node->left, current_precedence);
+                    fprintf(ostream, "}");
+                    break;
+                }
+                case CTG: {
+                    fprintf(ostream, "\\cot{");
+                    print_inorder(ostream, node->left, current_precedence);
+                    fprintf(ostream, "}");
+                    break;
+                }
+                case SH: {
+                    fprintf(ostream, "\\sinh{");
+                    print_inorder(ostream, node->left, current_precedence);
+                    fprintf(ostream, "}");
+                    break;
+                }
+                case CH: {
+                    fprintf(ostream, "\\cosh{");
+                    print_inorder(ostream, node->left, current_precedence);
+                    fprintf(ostream, "}");
+                    break;
+                }
+                case TH: {
+                    fprintf(ostream, "\\tanh{");
+                    print_inorder(ostream, node->left, current_precedence);
+                    fprintf(ostream, "}");
+                    break;
+                }
+                case CTH: {
+                    fprintf(ostream, "\\coth{");
+                    print_inorder(ostream, node->left, current_precedence);
+                    fprintf(ostream, "}");
+                    break;
+                }
+                case ARCSIN: {
+                    fprintf(ostream, "\\arcsin{");
+                    print_inorder(ostream, node->left, current_precedence);
+                    fprintf(ostream, "}");
+                    break;
+                }
+                case ARCCOS: {
+                    fprintf(ostream, "\\arccos{");
+                    print_inorder(ostream, node->left, current_precedence);
+                    fprintf(ostream, "}");
+                    break;
+                }
+                case ARCTG: {
+                    fprintf(ostream, "\\arctan{");
+                    print_inorder(ostream, node->left, current_precedence);
+                    fprintf(ostream, "}");
+                    break;
+                }
+                case ARCCTG: {
+                    fprintf(ostream, "\\arccot{");
+                    print_inorder(ostream, node->left, current_precedence);
+                    fprintf(ostream, "}");
+                    break;
+                }
+                default:
+                    print_operator(ostream, node->value);
+                    break;
             }
             break;
         }
         case VAR: {
-            fprintf(ostream, "x"); //FIXME - myrr meow
+            fprintf(ostream, "%s", var_nametable_[(int) node->value].name);
             break;
         }
         case NUM: {
             fprintf(ostream, "%g", node->value);
             break;
         }
-        case NIL: {
-            break;
-        }
         default:
             break;
     };
 
-    if (node->right != nullptr && !(
-       (int) node->type  == OP     && (
-       (int) node->value == DIV    ||
-       (int) node->value == LN     ||
-       (int) node->value == LOG    ||
-       (int) node->value == SIN    ||
-       (int) node->value == COS    ||
-       (int) node->value == TG     ||
-       (int) node->value == CTG    ||
-       (int) node->value == SH     ||
-       (int) node->value == CH     ||
-       (int) node->value == TH     ||
-       (int) node->value == CTH    ||
-       (int) node->value == ARCSIN ||
-       (int) node->value == ARCCOS ||
-       (int) node->value == ARCTG  ||
-       (int) node->value == ARCCTG ||
-       (int) node->value == ARCCH  ||
-       (int) node->value == ARCSH  ||
-       (int) node->value == ARCTH  ||
-       (int) node->value == ARCCTH))) {
-        if (node->right->type == NIL) return;
+    if (node->right != nullptr && !((int) node->type == OP && is_unary(node->value))) {
+        if (node->right == nullptr) return;
         if (current_precedence > parent_precedence) {
             fprintf(ostream, "(");
         }
@@ -258,14 +250,34 @@ void exp_tree_t::print_inorder(FILE* ostream, node_t* node, int parent_precedenc
     }
 }
 
+bool exp_tree_t::is_unary(double value) {
+    return (int) value == DIV    ||
+           (int) value == LN     ||
+           (int) value == LOG    ||
+           (int) value == SIN    ||
+           (int) value == COS    ||
+           (int) value == TG     ||
+           (int) value == CTG    ||
+           (int) value == SH     ||
+           (int) value == CH     ||
+           (int) value == TH     ||
+           (int) value == CTH    ||
+           (int) value == ARCSIN ||
+           (int) value == ARCCOS ||
+           (int) value == ARCTG  ||
+           (int) value == ARCCTG ||
+           (int) value == ARCCH  ||
+           (int) value == ARCSH  ||
+           (int) value == ARCTH  ||
+           (int) value == ARCCTH;
+}
+
 int exp_tree_t::get_operator_precedence(int operation) {
     switch (operation) {
         case ADD:
-            [[fallthrough]];
         case SUB:
             return 1;
         case MUL:
-            [[fallthrough]];
         case DIV:
             return 2;
         case POW:
@@ -390,9 +402,6 @@ void exp_tree_t::print_nodes(FILE* tree_file, node_t* node, size_t rank) {
         case NUM:
             fprintf(tree_file, "'#ADD8E6'");
             break;
-        case NIL:
-            fprintf(tree_file, "'#ADA8F0'");
-            break;
         default:
             break;
     };
@@ -407,12 +416,10 @@ void exp_tree_t::print_nodes(FILE* tree_file, node_t* node, size_t rank) {
             break;
         }
         case VAR:
-            fprintf(tree_file,  "%c", char(node->value)); //FIXME - myrr meow
+            fprintf(tree_file,  "%s", var_nametable_[(int) node->value].name);
             break;
         case NUM:
             fprintf(tree_file, "%f", node->value);
-            break;
-        case NIL:
             break;
         default:
             break;

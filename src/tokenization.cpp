@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <limits.h>
 #include "text_lib.h"
 #include "logger.h"
 #include "expression_tree.h"
@@ -17,7 +18,12 @@ node_t* exp_tree_t::token_init(text_t* text) {
     tokens_array_size_ = text->symbols_amount;
 
     tokenize_text(text);
+
+#ifdef DEBUG
     print_tokens_array();
+    print_var_nametable();
+#endif /* DEBUG */
+
     root_ = link_tokens();
     add_parents_rel_r(root_, nullptr);
     return root_;
@@ -82,10 +88,10 @@ void exp_tree_t::tokenize_text(text_t* text) {
             initialize_op_node(&tokens_[i], POW);
             ip++;
         }
-        else if (text->symbols[ip] >= '0' && text->symbols[ip] <= '9') { // isdigit
+        else if (isdigit(text->symbols[ip])) {
             parse_number(text, &ip, &tokens_[i]);
         }
-        else if (text->symbols[ip] >= 'a' && text->symbols[ip] <= 'z') { // isalpha
+        else if (isalpha(text->symbols[ip])) {
             parse_identificator(text, &ip, &tokens_[i]);
         }
         else {
@@ -111,19 +117,19 @@ void exp_tree_t::parse_identificator(text_t* text, size_t* ip, node_t* node) {
     size_t i = 0;
     char name[MAX_NAME_LEN] = "";
     while ((i < MAX_NAME_LEN) &&
-          ((text->symbols[*ip] >= 'a' && text->symbols[*ip] <= 'z') ||
-           (text->symbols[*ip] >= '0' && text->symbols[*ip] <= '9') ||
-           (text->symbols[*ip] == '_'))) {
+          ((isalpha(text->symbols[*ip])) ||
+            isdigit(text->symbols[*ip])  ||
+            text->symbols[*ip] == '_')) {
         name[i++] = (char) text->symbols[*ip];
         (*ip)++;
     }
 
     if (i == MAX_NAME_LEN) {
-        LOG(ERROR, "Too long name error\n"); //TODO - add this err
+        LOG(ERROR, "Too long name error\n");
         return;
     }
 
-    op_t func = is_func(name); //ХУЙНЯ - is_operator
+    op_t func = is_operator(name);
     if (func != POISON) {
         node->type = OP;
         node->value = func;
@@ -134,7 +140,7 @@ void exp_tree_t::parse_identificator(text_t* text, size_t* ip, node_t* node) {
     }
     else {
         node->type = VAR;
-        node->value = double(*name); //TODO - add var_name_table;
+        node->value = index_in_nametable(name);
 
         node->parent = nullptr;
         node->right = nullptr;
@@ -142,7 +148,42 @@ void exp_tree_t::parse_identificator(text_t* text, size_t* ip, node_t* node) {
     }
 }
 
-op_t exp_tree_t::is_func(char* op) {
+double exp_tree_t::index_in_nametable(char* name) {
+    assert(name != nullptr);
+
+    double index = find_name_in_nametable(name);
+
+    if (index >= 0) {
+        return index;
+    }
+    return add_name_to_nametable(name);
+}
+
+double exp_tree_t::add_name_to_nametable(char* name) {
+    assert(name != nullptr);
+
+    strncpy(var_nametable_[var_nametable_size_++].name, name, MAX_NAME_LEN);
+    return var_nametable_size_ - 1;
+}
+
+double exp_tree_t::find_name_in_nametable(char* name) {
+    assert(name != nullptr);
+
+    for (size_t i = 0; i < var_nametable_size_; i++) {
+        if (strncmp(var_nametable_[i].name, name, MAX_NAME_LEN) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+void exp_tree_t::print_var_nametable() {
+    for (size_t i = 0; i < var_nametable_size_; i++) {
+        printf("name[%zu]: %s\n", i, var_nametable_[i].name);
+    }
+}
+
+op_t exp_tree_t::is_operator(char* op) {
     assert(op != nullptr);
 
     for (size_t i = 0; i < func_name_table_len; i++) {
@@ -167,7 +208,7 @@ void exp_tree_t::initialize_op_node(node_t* node, double val) {
 void exp_tree_t::parse_number(text_t* text, size_t* ip, node_t* node) {
     assert(text != nullptr);
     assert(ip != nullptr);
-//NOTE - more then MAX_INT - SyntaxError как проверить переполнение
+
     node->parent = nullptr;
     node->right = nullptr;
     node->left = nullptr;
@@ -175,6 +216,10 @@ void exp_tree_t::parse_number(text_t* text, size_t* ip, node_t* node) {
 
     int num = 0;
     while (text->symbols[*ip] >= '0' && text->symbols[*ip] <= '9') {
+        if (num > INT_MAX / 10) {
+            LOG(ERROR, "SYNTAX ERROR: Num is greater than MAX_INT");
+            return;
+        }
         num = (num * 10) + (text->symbols[*ip] - '0');
         (*ip)++;
     }
@@ -187,6 +232,11 @@ void exp_tree_t::parse_number(text_t* text, size_t* ip, node_t* node) {
 
     int dec = 0;
     while (text->symbols[*ip] >= '0' && text->symbols[*ip] <= '9') {
+        if (num > INT_MAX / 10) {
+            LOG(ERROR, "SYNTAX ERROR: Num is greater than MAX_INT");
+            return;
+        }
+
         dec++;
         num = (num * 10) + text->symbols[*ip] - '0';
         (*ip)++;

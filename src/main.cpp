@@ -38,12 +38,7 @@ int main() {
         LOG(ERROR, "Failed to open a tex file\n");
         return 1;
     }
-
     exp_tree_t tree = {};
-
-// NOTE - add унарный минус плюс
-// STUB - полуторное дерево
-// TODO - верификатор: нет циклов, все что не листья - операторы, у var, num нетс детей
 
     tree.set_dump_ostream(file);
     tree.init(istream);
@@ -52,12 +47,30 @@ int main() {
     node_t* new_root = tree.differentiate_expression(tex);
     tree.dump(new_root);
 
+//     node_t node1 = {};
+//     node_t node2 = {};
+//     node_t node3 = {};
+//     node1.parent = nullptr;
+//     node1.right = &node2;
+//     node1.left = &node3;
+//
+//     node2.parent = &node1;
+//     node2.right = nullptr;
+//     node2.left = &node1;
+//
+//     node3.right = nullptr;
+//     node3.left = nullptr;
+//     node3.parent = &node1;
+//     tree.verify(&node1);
+
     new_root = tree.optimize(new_root);
+    tree.print_exp_to_tex(tex, new_root);
     tree.dump(new_root);
 
     tree.dtor();
     tree.delete_tree(new_root);
 
+    fprintf(tex, "\n\\end{document}\n");
     if (fclose(tex) == EOF) {
         LOG(ERROR, "Failed to close tex file\n" STRERROR(errno));
         return 1;
